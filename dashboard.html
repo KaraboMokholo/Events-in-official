@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard - QR Upload</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <!-- ADD THESE TWO LINES FOR ZIP DOWNLOAD -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <style>
+    :root {
+      --red: #dc2626;
+      --navy: #1e3a8a;
+      --black: #111111;
+      --white: #ffffff;
+      --gray-light: #f9fafb;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: var(--gray-light);
+      color: var(--black);
+      margin: 0;
+      line-height: 1.6;
+    }
+    .container { width: 90%; max-width: 1280px; margin: 0 auto; padding: 0 1rem; }
+
+    /* Navbar */
+    nav {
+      position: fixed;
+      top: 0; left: 0; width: 100%;
+      background: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      z-index: 1000;
+      padding: 1rem 0;
+    }
+    .nav-container { display: flex; justify-content: space-between; align-items: center; }
+    .logo img { height: 40px; }
+    .nav-links { display: flex; gap: 2.5rem; align-items: center; }
+    .nav-links a { font-weight: 500; color: var(--black); text-decoration: none; }
+    .nav-links a:hover { color: var(--red); }
+    .mobile-menu { display: none; font-size: 1.8rem; cursor: pointer; }
+
+    /* Auth & Dashboard container */
+    .auth-dashboard-container {
+      padding: 140px 0 60px;
+      min-height: 80vh;
+    }
+    .auth-card, .dashboard-content {
+      background: white;
+      padding: 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .auth-card { max-width: 480px; }
+    h2 { text-align: center; margin-bottom: 1.5rem; }
+
+    /* Form styles */
+    label { display: block; margin: 1rem 0 0.5rem; font-weight: 500; }
+    input {
+      width: 100%;
+      padding: 0.9rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    .cta-button {
+      width: 100%;
+      padding: 1rem;
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 1.5rem 0 1rem;
+    }
+    .secondary-btn {
+      width: 100%;
+      padding: 1rem;
+      background: transparent;
+      border: 2px solid var(--navy);
+      color: var(--navy);
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Dashboard layout */
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+    .qr-gallery-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 2rem;
+    }
+    #qrcode { margin: 1.5rem auto; text-align: center; }
+    #gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1.2rem;
+    }
+    #gallery > div {
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      position: relative;
+    }
+    #gallery img, #gallery video { width: 100%; display: block; }
+    
+    /* Download button on each file */
+    .download-file-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    /* Download all button */
+    #downloadAllBtn {
+      padding: 12px 28px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin: 1rem auto;
+    }
+    
+    #downloadAllBtn:hover {
+      background: linear-gradient(135deg, #059669, #047857);
+    }
+    
+    #downloadAllBtn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    
+    #downloadStatus {
+      margin-top: 0.8rem;
+      color: #6b7280;
+      font-size: 0.9rem;
+      display: none;
+    }
+    
+    /* Limit warning */
+    #limitWarning {
+      display: none;
+      background: linear-gradient(135deg, #fee2e2, #fecaca);
+      border: 2px solid #dc2626;
+      border-radius: 10px;
+      padding: 1.2rem;
+      margin-top: 1.5rem;
+      text-align: center;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+      100% { transform: scale(1); }
+    }
+    
+    /* Loading spinner */
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .qr-gallery-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; flex-direction: column; position: absolute; top: 100%; left: 0; width: 100%; background: white; padding: 2rem; }
+      .nav-links.active { display: flex; }
+      .mobile-menu { display: block; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav>
+    <div class="container nav-container">
+      <div class="logo">
+        <a href="index.html"><img src="logo.png" alt="QR Upload"></a>
+      </div>
+      <div class="nav-links" id="navLinks">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how">How It Works</a>
+        <a href="index.html#occasions">Occasions</a>
+        <a href="dashboard.html" style="color:var(--red);">Dashboard</a>
+      </div>
+      <div class="mobile-menu" id="mobileMenu">☰</div>
+    </div>
+  </nav>
+
+  <div class="auth-dashboard-container container">
+    <!-- Auth form (shown when not logged in) -->
+    <div id="authSection" class="auth-card">
+      <h2>Login or Register</h2>
+      <form id="authForm">
+        <label>Email</label>
+        <input type="email" id="email" required autocomplete="email"/>
+
+        <label>Password</label>
+        <input type="password" id="password" required minlength="6" autocomplete="current-password"/>
+
+        <button type="button" id="registerBtn" class="cta-button">Register & Pay</button>
+        <button type="button" id="loginBtn" class="secondary-btn">Login</button>
+      </form>
+    </div>
+
+    <!-- Dashboard (shown when logged in) -->
+    <div id="dashboardSection" class="dashboard-content" style="display:none;">
+      <div class="dashboard-header">
+        <div>
+          <h2>Your Event Dashboard</h2>
+          <p>Logged in as <span id="userEmail"></span></p>
+        </div>
+        <button id="logoutBtn" style="background:#dc2626; color:white; padding:0.8rem 1.8rem; border:none; border-radius:8px; cursor:pointer; font-weight:600;">
+          Logout
+        </button>
+      </div>
+
+      <div style="margin: 2rem 0; text-align: center; background: #f8f9fa; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <h3 style="margin-bottom: 1rem; color: var(--navy);">Event Name</h3>
+        
+        <input 
+          id="eventNameInput" 
+          type="text" 
+          placeholder="e.g. Karabo's Wedding 2026" 
+          style="width: 100%; max-width: 500px; padding: 0.9rem; font-size: 1.1rem; border: 1px solid #d1d5db; border-radius: 8px; margin-bottom: 1rem;"
+        />
+        
+        <button 
+          id="saveEventNameBtn" 
+          style="padding: 0.8rem 2rem; background: var(--red); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1.1rem;"
+        >
+          Save Event Name
+        </button>
+
+        <p id="currentEventNameDisplay" style="margin-top: 1.5rem; font-size: 1.4rem; font-weight: 700; color: var(--navy); min-height: 2rem;">
+          Loading event name...
+        </p>
+      </div>
+
+      <!-- Upload Count & Download Section -->
+      <div style="margin: 2rem 0; text-align: center; background: #f8f9fa; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <p id="uploadCountText" style="font-weight: 600; font-size: 1.2rem; margin-bottom: 0.8rem; color: var(--navy);">
+          Loading upload count...
+        </p>
+        
+        <div style="background: #e5e7eb; border-radius: 999px; height: 12px; width: 100%; max-width: 500px; margin: 0 auto; overflow: hidden;">
+          <div id="progressFillBar" style="background: var(--red); height: 100%; width: 0%; transition: width 0.5s ease;"></div>
+        </div>
+        
+        <!-- BULK DOWNLOAD BUTTON -->
+        <div style="margin-top: 1.5rem;">
+          <button id="downloadAllBtn">
+            📦 Download All as ZIP
+          </button>
+          <p id="downloadStatus"></p>
+        </div>
+        
+        <!-- LIMIT WARNING -->
+        <div id="limitWarning">
+          <p style="margin: 0 0 0.8rem 0; color: #7f1d1d; font-weight: 700; font-size: 1.1rem;">
+            ⚠️ UPLOAD LIMIT REACHED!
+          </p>
+          <p style="margin: 0 0 1rem 0; color: #991b1b;">
+            You've used all your uploads. Guests can no longer upload files.
+          </p>
+          <a href="index.html#pricing" style="display: inline-block; background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; padding: 0.7rem 2rem; border-radius: 8px; text-decoration: none; font-weight: 700; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3); transition: all 0.3s;">
+            🔥 UPGRADE YOUR PLAN
+          </a>
+          <p style="margin: 0.8rem 0 0 0; font-size: 0.85rem; color: #92400e;">
+            Get more uploads instantly
+          </p>
+        </div>
+      </div>
+
+      <div class="qr-gallery-grid">
+        <div>
+          <h3>Your QR Code</h3>
+          <div id="qrcode"></div>
+        </div>
+
+        <div>
+          <h3>Event Gallery</h3>
+          <div id="gallery"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLETE UPDATED SCRIPT -->
+<script>
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyBib4LUDGsEfqBvfnvZbnisicu9Ix0v9Uo",
+    authDomain: "qr-upload-app-197fe.firebaseapp.com",
+    projectId: "qr-upload-app-197fe",
+    storageBucket: "qr-upload-app-197fe.firebasestorage.app",
+    messagingSenderId: "425886605550",
+    appId: "1:425886605550:web:60de264c60264d018953ff"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  // Get elements
+  const authSection = document.getElementById('authSection');
+  const dashboardSection = document.getElementById('dashboardSection');
+  const userEmailEl = document.getElementById('userEmail');
+  const gallery = document.getElementById('gallery');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+  const downloadStatus = document.getElementById('downloadStatus');
+
+  // Function to generate QR code
+  function generateQRCode(uid) {
+    const qrContainer = document.getElementById('qrcode');
+    qrContainer.innerHTML = '';
+    const uploadUrl = `${window.location.origin}/upload.html?uid=${uid}`;
+    new QRCode(qrContainer, {
+      text: uploadUrl,
+      width: 220,
+      height: 220
+    });
+    const p = document.createElement('p');
+    p.innerHTML = `<small>Share: ${uploadUrl}</small>`;
+    p.style.textAlign = 'center';
+    qrContainer.appendChild(p);
+  }
+
+  // Function to display uploads
+  function displayUploads(uploads) {
+    console.log('🎨 Rendering gallery with', uploads.length, 'uploads');
+    
+    gallery.innerHTML = '';
+    
+    if (!uploads || uploads.length === 0) {
+      gallery.innerHTML = '<p style="text-align:center; padding: 40px; color: #666;">No uploads found.</p>';
+      downloadAllBtn.style.display = 'none';
+      return;
+    }
+    
+    // Show download button
+    downloadAllBtn.style.display = 'flex';
+    
+    // Sort by timestamp if available
+    uploads.sort((a, b) => {
+      if (a.timestamp && b.timestamp) {
+        return b.timestamp - a.timestamp;
+      }
+      if (a.uploadedAt && b.uploadedAt) {
+        return b.uploadedAt - a.uploadedAt;
+      }
+      return 0;
+    });
+    
+    uploads.forEach((file, index) => {
+      console.log(`🖼️ Rendering file ${index + 1}:`, file.name, file.url);
+      
+      const div = document.createElement('div');
+      div.style.borderRadius = '12px';
+      div.style.overflow = 'hidden';
+      div.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+      div.style.marginBottom = '15px';
+      div.style.background = '#f8f9fa';
+      div.style.position = 'relative';
+      
+      if (file.type && file.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = file.url;
+        img.style.width = '100%';
+        img.style.height = '200px';
+        img.style.objectFit = 'cover';
+        img.style.display = 'block';
+        img.onerror = function() {
+          console.error('❌ Failed to load image:', file.url);
+          this.style.display = 'none';
+          div.innerHTML = `<div style="padding:20px; text-align:center;">
+            <p>📄 ${file.name}</p>
+            <p><small>Image failed to load</small></p>
+            <a href="${file.url}" target="_blank">Open link</a>
+          </div>`;
+        };
+        div.appendChild(img);
+        
+      } else if (file.type && file.type.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.src = file.url;
+        video.controls = true;
+        video.style.width = '100%';
+        video.style.height = '200px';
+        video.style.objectFit = 'cover';
+        div.appendChild(video);
+      } else {
+        const link = document.createElement('a');
+        link.href = file.url;
+        link.textContent = `📄 ${file.name || 'Download file'}`;
+        link.style.display = 'block';
+        link.style.padding = '20px';
+        link.style.textAlign = 'center';
+        link.style.textDecoration = 'none';
+        link.style.color = '#1e3a8a';
+        link.style.fontWeight = 'bold';
+        link.target = '_blank';
+        div.appendChild(link);
+      }
+      
+      // Add download button to each file
+      const downloadBtn = document.createElement('button');
+      downloadBtn.className = 'download-file-btn';
+      downloadBtn.innerHTML = '⬇️';
+      downloadBtn.title = 'Download this file';
+      downloadBtn.onclick = (e) => {
+        e.stopPropagation();
+        const img = div.querySelector('img, video');
+        const link = div.querySelector('a');
+        
+        if (img) {
+          const a = document.createElement('a');
+          a.href = img.src;
+          a.download = file.name || `download_${Date.now()}.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else if (link) {
+          link.click();
+        }
+      };
+      
+      div.appendChild(downloadBtn);
+      gallery.appendChild(div);
+    });
+  }
+
+  // Function to load user's uploads
+  function loadUserUploads(userId) {
+    console.log('🚀 Loading uploads for user:', userId);
+    
+    // Clear gallery first
+    gallery.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">Loading uploads...</p>';
+    
+    // Get ALL uploads from Firestore
+    db.collection('uploads').get().then(snapshot => {
+      console.log(`📊 Total documents in Firestore: ${snapshot.size}`);
+      
+      const uploads = [];
+      let foundCount = 0;
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        console.log(`📄 Checking document: userId="${data.userId || 'NO USERID'}" vs current="${userId}"`);
+        
+        // Check if this upload belongs to current user
+        if (data.userId === userId) {
+          console.log(`✅ MATCH! Found upload: ${data.name || 'unnamed'} - ${data.url}`);
+          uploads.push(data);
+          foundCount++;
+        }
+      });
+      
+      console.log(`🎯 Found ${foundCount} uploads for user ${userId}`);
+      
+      if (foundCount === 0) {
+        gallery.innerHTML = `
+          <div style="text-align:center; padding:40px; color:#666;">
+            <p>No uploads found yet.</p>
+            <p>Share your QR code with guests to get started!</p>
+          </div>
+        `;
+      } else {
+        console.log('🖼️ Displaying uploads:', uploads);
+        displayUploads(uploads);
+      }
+      
+      // Update upload count
+      updateUploadCount(foundCount);
+      updateLimitDisplay(userId);
+      
+    }).catch(error => {
+      console.error('❌ Error loading uploads:', error);
+      gallery.innerHTML = `<p style="text-align:center; padding:20px; color:red;">Error loading: ${error.message}</p>`;
+    });
+  }
+
+  // Function to update upload count
+  function updateUploadCount(count) {
+    const uploadCountText = document.getElementById('uploadCountText');
+    const progressFillBar = document.getElementById('progressFillBar');
+    
+    console.log(`📈 Updating upload count: ${count}`);
+    
+    if (!uploadCountText) {
+      console.error('❌ uploadCountText element not found!');
+      return;
+    }
+    
+    uploadCountText.textContent = `${count} uploaded`;
+    
+    if (progressFillBar) {
+      progressFillBar.style.width = '0%';
+    }
+  }
+
+  // Function to update limit display
+  function updateLimitDisplay(userId) {
+    console.log('📊 Updating limit display for:', userId);
+    
+    db.collection('users').doc(userId).get().then(userDoc => {
+      if (!userDoc.exists) {
+        console.log('No user document found');
+        return;
+      }
+      
+      const userData = userDoc.data();
+      const limit = userData.photos_limit || 'unlimited';
+      
+      console.log('User plan:', limit);
+      
+      // Get current upload count
+      db.collection('uploads')
+        .where('userId', '==', userId)
+        .get()
+        .then(uploadsSnapshot => {
+          const currentCount = uploadsSnapshot.size;
+          
+          console.log(`Current uploads: ${currentCount}, Limit: ${limit}`);
+          
+          const uploadCountText = document.getElementById('uploadCountText');
+          const progressFillBar = document.getElementById('progressFillBar');
+          const limitWarning = document.getElementById('limitWarning');
+          
+          if (limit === 'unlimited') {
+            if (uploadCountText) {
+              uploadCountText.innerHTML = `
+                <div style="font-size: 1.4rem; font-weight: 700; color: #10b981;">
+                  ${currentCount} uploaded
+                </div>
+                <div style="font-size: 0.9rem; color: #6b7280;">
+                  📈 Unlimited Plan
+                </div>
+              `;
+            }
+            if (progressFillBar) {
+              progressFillBar.style.width = '0%';
+              progressFillBar.style.background = '#10b981';
+            }
+            if (limitWarning) {
+              limitWarning.style.display = 'none';
+            }
+            
+          } else {
+            const limitNum = parseInt(limit);
+            const remaining = limitNum - currentCount;
+            const percent = Math.min((currentCount / limitNum) * 100, 100);
+            
+            let color, status, icon;
+            if (remaining <= 0) {
+              color = '#dc2626';
+              status = 'LIMIT REACHED';
+              icon = '❌';
+            } else if (remaining <= Math.ceil(limitNum * 0.2)) {
+              color = '#f59e0b';
+              status = 'ALMOST FULL';
+              icon = '⚠️';
+            } else {
+              color = '#10b981';
+              status = 'OK';
+              icon = '✅';
+            }
+            
+            if (uploadCountText) {
+              uploadCountText.innerHTML = `
+                <div style="font-size: 1.4rem; font-weight: 700; color: ${color};">
+                  ${currentCount} / ${limit} uploaded
+                </div>
+                <div style="font-size: 0.9rem; color: ${color};">
+                  ${icon} ${remaining} remaining • ${status}
+                </div>
+              `;
+            }
+            
+            if (progressFillBar) {
+              progressFillBar.style.width = `${percent}%`;
+              progressFillBar.style.background = color;
+              progressFillBar.style.transition = 'all 0.5s ease';
+            }
+            
+            if (limitWarning) {
+              if (remaining <= 0) {
+                limitWarning.style.display = 'block';
+              } else {
+                limitWarning.style.display = 'none';
+              }
+            }
+          }
+          
+        }).catch(error => {
+          console.error('Error getting upload count:', error);
+        });
+        
+    }).catch(error => {
+      console.error('Error getting user data:', error);
+    });
+  }
+
+  // BULK DOWNLOAD AS ZIP FUNCTION
+  async function downloadAllAsZip(userId) {
+    console.log('📦 Starting ZIP download for user:', userId);
+    
+    downloadAllBtn.disabled = true;
+    downloadAllBtn.innerHTML = '<div class="loading-spinner"></div> Preparing...';
+    downloadStatus.textContent = 'Getting your files...';
+    downloadStatus.style.display = 'block';
+    downloadStatus.style.color = '#3b82f6';
+    
+    try {
+      const snapshot = await db.collection('uploads').where('userId', '==', userId).get();
+      
+      if (snapshot.empty) {
+        downloadStatus.textContent = '❌ No files to download';
+        downloadStatus.style.color = '#dc2626';
+        downloadAllBtn.disabled = false;
+        downloadAllBtn.innerHTML = '📦 Download All as ZIP';
+        return;
+      }
+      
+      const files = [];
+      snapshot.forEach(doc => files.push(doc.data()));
+      
+      downloadStatus.textContent = `Found ${files.length} files. Creating ZIP...`;
+      
+      const zip = new JSZip();
+      let downloadedCount = 0;
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        downloadStatus.textContent = `Adding file ${i + 1}/${files.length}`;
+        
+        try {
+          const response = await fetch(file.url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          const blob = await response.blob();
+          const fileName = file.name || `upload_${file.timestamp || Date.now()}.${getFileExtension(file.type)}`;
+          zip.file(fileName, blob);
+          downloadedCount++;
+        } catch (error) {
+          console.log(`Skipped ${file.name}:`, error.message);
+        }
+      }
+      
+      if (downloadedCount === 0) {
+        downloadStatus.textContent = '❌ Failed to download any files';
+        downloadStatus.style.color = '#dc2626';
+        downloadAllBtn.disabled = false;
+        downloadAllBtn.innerHTML = '📦 Download All as ZIP';
+        return;
+      }
+      
+      downloadStatus.textContent = `Compressing ${downloadedCount} files...`;
+      
+      const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+      const eventName = document.getElementById('currentEventNameDisplay').textContent;
+      const safeEventName = eventName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30) || 'Event';
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `${safeEventName}_${dateStr}.zip`;
+      
+      saveAs(zipBlob, fileName);
+      
+      downloadStatus.textContent = `✅ Downloaded ${downloadedCount} files as "${fileName}"`;
+      downloadStatus.style.color = '#10b981';
+      
+      setTimeout(() => {
+        downloadAllBtn.disabled = false;
+        downloadAllBtn.innerHTML = '📦 Download All as ZIP';
+        downloadStatus.style.display = 'none';
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Download error:', error);
+      downloadStatus.textContent = `❌ Error: ${error.message}`;
+      downloadStatus.style.color = '#dc2626';
+      downloadAllBtn.disabled = false;
+      downloadAllBtn.innerHTML = '📦 Download All as ZIP';
+    }
+  }
+
+  // Helper function for file extensions
+  function getFileExtension(mimeType) {
+    const extensions = {
+      'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
+      'image/gif': 'gif', 'image/webp': 'webp', 'video/mp4': 'mp4',
+      'video/mov': 'mov', 'video/avi': 'avi', 'video/webm': 'webm',
+      'application/pdf': 'pdf', 'text/plain': 'txt',
+      'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx'
+    };
+    return extensions[mimeType] || 'bin';
+  }
+
+  // Auth state listener
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      console.log('User logged in:', user.email);
+      authSection.style.display = 'none';
+      dashboardSection.style.display = 'block';
+      userEmailEl.textContent = user.email;
+      generateQRCode(user.uid);
+      
+      // Load user data
+      db.collection('users').doc(user.uid).get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          const eventName = data.event_name || 'No event name set';
+          document.getElementById('currentEventNameDisplay').textContent = eventName;
+          document.getElementById('eventNameInput').value = eventName;
+        }
+      });
+      
+      // Load user's uploads
+      loadUserUploads(user.uid);
+      
+      // Real-time listener
+      db.collection('uploads').onSnapshot(() => {
+        loadUserUploads(user.uid);
+      });
+      
+      // Save event name button
+      document.getElementById('saveEventNameBtn').addEventListener('click', () => {
+        const newName = document.getElementById('eventNameInput').value.trim();
+        if (!newName) {
+          alert('Please enter an event name');
+          return;
+        }
+        
+        db.collection('users').doc(user.uid).set({
+          event_name: newName
+        }, { merge: true })
+        .then(() => {
+          alert('Event name saved!');
+        })
+        .catch(error => {
+          alert('Error: ' + error.message);
+        });
+      });
+      
+    } else {
+      console.log('No user logged in');
+      authSection.style.display = 'block';
+      dashboardSection.style.display = 'none';
+    }
+  });
+
+  // Download button event
+  downloadAllBtn.addEventListener('click', () => {
+    const user = auth.currentUser;
+    if (user) {
+      downloadAllAsZip(user.uid);
+    }
+  });
+
+  // PAYSTACK REGISTRATION
+  document.getElementById('registerBtn').addEventListener('click', () => {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value.trim();
+    
+    if (!email || !password) {
+      alert('Please fill in both email and password');
+      return;
+    }
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const plan = urlParams.get('plan') || 'unlimited';
+    const amount = urlParams.get('amount') || '9900';
+    
+    console.log('Registering with plan:', plan, 'amount:', amount);
+    
+    const isFree = (plan === 'free' || amount === '0');
+    
+    const createAccount = () => {
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(cred => {
+          const photosLimit = plan === 'free' ? 5 : 
+                             plan === '50' ? 50 :
+                             plan === '150' ? 150 :
+                             plan === '500' ? 500 : 'unlimited';
+          
+          db.collection('users').doc(cred.user.uid).set({
+            plan: plan,
+            photos_limit: photosLimit,
+            event_name: `My ${plan} Event`,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          
+          alert('Account created successfully!');
+        })
+        .catch(err => {
+          alert('Error creating account: ' + err.message);
+          console.error(err);
+        });
+    };
+    
+    if (isFree) {
+      createAccount();
+    } else {
+      const PAYSTACK_PUBLIC_KEY = 'pk_test_753a47c57b6c80ec1412b731b5f1af41e143ef30';
+      
+      const handler = PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: email,
+        amount: parseInt(amount),
+        currency: 'ZAR',
+        ref: 'reg-' + Math.floor(Math.random() * 1000000000 + 1),
+        onClose: () => {
+          alert('Payment window closed.');
+        },
+        callback: (response) => {
+          alert('Payment successful! Creating account...');
+          createAccount();
+        }
+      });
+      
+      handler.openIframe();
+    }
+  });
+
+  // LOGIN
+  document.getElementById('loginBtn').addEventListener('click', () => {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    
+    if (!email || !password) {
+      alert('Please fill in both email and password');
+      return;
+    }
+    
+    auth.signInWithEmailAndPassword(email, password)
+      .then(() => {
+        console.log('Login successful');
+      })
+      .catch(err => {
+        alert('Login failed: ' + err.message);
+      });
+  });
+
+  // LOGOUT
+  logoutBtn.addEventListener('click', () => {
+    auth.signOut()
+      .then(() => {
+        console.log('Logged out');
+      })
+      .catch(err => {
+        console.error('Logout error:', err);
+      });
+  });
+
+  // Mobile menu
+  document.getElementById('mobileMenu').addEventListener('click', function() {
+    const links = document.getElementById('navLinks');
+    links.classList.toggle('active');
+    this.textContent = links.classList.contains('active') ? '✕' : '☰';
+  });
+
+  // Show plan info on auth page
+  const urlParams = new URLSearchParams(window.location.search);
+  const plan = urlParams.get('plan');
+  const amount = urlParams.get('amount');
+  
+  if (plan && amount) {
+    const planInfo = document.createElement('p');
+    planInfo.style.textAlign = 'center';
+    planInfo.style.color = '#dc2626';
+    planInfo.style.fontWeight = '600';
+    planInfo.style.margin = '1rem 0';
+    planInfo.textContent = `Plan: ${plan} photos – R${parseInt(amount)/100}`;
+    
+    const authForm = document.getElementById('authForm');
+    const registerBtn = document.getElementById('registerBtn');
+    if (authForm && registerBtn) {
+      authForm.insertBefore(planInfo, registerBtn);
+    }
+  }
+</script>
+</body>
+</html>

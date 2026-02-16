@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Upload Your Photos & Videos</title>
+  <link rel="stylesheet" href="style.css"/>  <!-- assuming you have a shared style.css -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #f9fafb;
+      margin: 0;
+      padding: 20px;
+      color: #111;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: white;
+      padding: 32px;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #1e3a8a;
+      margin-bottom: 1.5rem;
+    }
+    #uploadForm {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    label {
+      font-weight: 600;
+      color: #374151;
+    }
+    input[type="file"] {
+      padding: 12px;
+      border: 2px dashed #d1d5db;
+      border-radius: 12px;
+      background: #f9fafb;
+    }
+
+        /* Add this to prevent accidental reload */
+    #uploadForm button[type="submit"] {
+      pointer-events: auto;
+    }
+    
+    /* Make message boxes more visible */
+    .success { 
+      background: #d1fae5; 
+      color: #065f46; 
+      border: 2px solid #10b981;
+    }
+    .error { 
+      background: #fee2e2; 
+      color: #991b1b; 
+      border: 2px solid #ef4444;
+    }
+    
+    button {
+      background: #dc2626;
+      color: white;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #b91c1c;
+    }
+    #message {
+      padding: 16px;
+      border-radius: 12px;
+      margin: 1rem 0;
+      text-align: center;
+      font-weight: 500;
+    }
+    .success { background: #d1fae5; color: #065f46; }
+    .error   { background: #fee2e2; color: #991b1b; }
+    .preview-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 2rem;
+    }
+    .preview-item {
+      background: #f3f4f6;
+      padding: 8px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+
+        /* Drag & Drop Styles */
+    #dropZone.drag-over {
+      background: #fee2e2;
+      border-color: #b91c1c;
+      transform: scale(1.02);
+    }
+    
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .file-icon {
+      font-size: 1.5rem;
+    }
+    
+    .file-name {
+      font-weight: 500;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .file-size {
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+    
+    .remove-file {
+      color: #dc2626;
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    
+    .remove-file:hover {
+      background: #fee2e2;
+    }
+    
+    #uploadBtn:hover {
+      background: #b91c1c;
+    }
+    
+    #uploadBtn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Upload Your Photos & Videos</h1>
+
+  <!-- Drag & Drop Zone -->
+  <div id="dropZone" style="border: 3px dashed #dc2626; border-radius: 20px; padding: 60px 20px; text-align: center; background: #fef2f2; margin-bottom: 2rem; cursor: pointer; transition: all 0.3s;">
+    <div style="font-size: 4rem; color: #dc2626; margin-bottom: 1rem;">📁</div>
+    <h3 style="color: #1e3a8a; margin-bottom: 0.5rem;">Drag & Drop Files Here</h3>
+    <p style="color: #6b7280; margin-bottom: 1.5rem;">or click to browse</p>
+    <div style="background: white; display: inline-block; padding: 12px 30px; border-radius: 50px; border: 2px solid #dc2626; color: #dc2626; font-weight: 600;">
+      Choose Files
+    </div>
+    <p style="margin-top: 1rem; font-size: 0.9rem; color: #6b7280;">
+      Supports: JPG, PNG, GIF, MP4, MOV, PDF (Max 50MB each)
+    </p>
+  </div>
+
+  <!-- Hidden file input -->
+  <input type="file" id="files" multiple accept="image/*,video/*,.pdf,.doc,.docx,.txt" style="display: none;" />
+
+  <!-- Selected files preview -->
+  <div id="selectedFiles" style="margin-bottom: 2rem; display: none;">
+    <h3 style="color: #1e3a8a; margin-bottom: 1rem;">Selected Files (<span id="fileCount">0</span>)</h3>
+    <div id="fileList" style="background: #f8fafc; border-radius: 12px; padding: 1.5rem; max-height: 300px; overflow-y: auto;"></div>
+  </div>
+
+  <button id="uploadBtn" style="width: 100%; padding: 18px; background: #dc2626; color: white; border: none; border-radius: 12px; font-size: 1.2rem; font-weight: 600; cursor: pointer; transition: background 0.3s; display: none;">
+    📤 Upload <span id="uploadCount">0</span> File(s)
+  </button>
+
+  <div id="message" style="display:none;"></div>
+  <div id="preview" class="preview-gallery"></div>
+</div>
+
+<script>
+  // Firebase setup
+  const firebaseConfig = {
+    apiKey: "AIzaSyBib4LUDGsEfqBvfnvZbnisicu9Ix0v9Uo",
+    authDomain: "qr-upload-app-197fe.firebaseapp.com",
+    projectId: "qr-upload-app-197fe",
+    storageBucket: "qr-upload-app-197fe.firebasestorage.app",
+    messagingSenderId: "425886605550",
+    appId: "1:425886605550:web:60de264c60264d018953ff"
+  };
+
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  const storage = firebase.storage();
+  const db = firebase.firestore();
+
+  // Get UID from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetUid = urlParams.get('uid');
+
+  // Get elements
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('files');
+  const selectedFilesDiv = document.getElementById('selectedFiles');
+  const fileList = document.getElementById('fileList');
+  const fileCount = document.getElementById('fileCount');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const uploadCount = document.getElementById('uploadCount');
+  const message = document.getElementById('message');
+  const preview = document.getElementById('preview');
+
+  // Store selected files
+  let selectedFiles = [];
+
+  // Show upload form by default
+  if (!targetUid) {
+    message.textContent = 'Invalid link — missing user ID.';
+    message.className = 'error';
+    message.style.display = 'block';
+    dropZone.style.display = 'none';
+  }
+
+  // ===== DRAG & DROP FUNCTIONALITY =====
+  
+  // Click on drop zone to trigger file input
+  dropZone.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  // Handle file selection via input
+  fileInput.addEventListener('change', handleFileSelect);
+
+  // Drag over event
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  // Drag leave event
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+  });
+
+  // Drop event
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    
+    if (e.dataTransfer.files.length) {
+      handleFileSelect({ target: { files: e.dataTransfer.files } });
+    }
+  });
+
+  // Handle file selection
+  function handleFileSelect(event) {
+    const files = Array.from(event.target.files);
+    
+    // Filter out files that are already selected
+    const newFiles = files.filter(newFile => {
+      return !selectedFiles.some(existingFile => 
+        existingFile.name === newFile.name && 
+        existingFile.size === newFile.size
+      );
+    });
+    
+    if (newFiles.length === 0) {
+      showMessage('⚠️ Some files are already selected', 'error');
+      return;
+    }
+    
+    // Check file sizes (max 50MB)
+    const oversizedFiles = newFiles.filter(file => file.size > 50 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      showMessage(`❌ Some files exceed 50MB limit: ${oversizedFiles.map(f => f.name).join(', ')}`, 'error');
+      return;
+    }
+    
+    // Add new files to selection
+    selectedFiles = [...selectedFiles, ...newFiles];
+    updateFileList();
+  }
+
+  // Update file list display
+  function updateFileList() {
+    fileList.innerHTML = '';
+    
+    selectedFiles.forEach((file, index) => {
+      const fileItem = document.createElement('div');
+      fileItem.className = 'file-item';
+      
+      const icon = getFileIcon(file);
+      const size = formatFileSize(file.size);
+      
+      fileItem.innerHTML = `
+        <div class="file-info">
+          <div class="file-icon">${icon}</div>
+          <div>
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${size}</div>
+          </div>
+        </div>
+        <button class="remove-file" data-index="${index}">✕</button>
+      `;
+      
+      fileList.appendChild(fileItem);
+    });
+    
+    // Add remove event listeners
+    document.querySelectorAll('.remove-file').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.target.getAttribute('data-index'));
+        selectedFiles.splice(index, 1);
+        updateFileList();
+      });
+    });
+    
+    // Update counters
+    fileCount.textContent = selectedFiles.length;
+    uploadCount.textContent = selectedFiles.length;
+    
+    // Show/hide elements
+    if (selectedFiles.length > 0) {
+      selectedFilesDiv.style.display = 'block';
+      uploadBtn.style.display = 'block';
+    } else {
+      selectedFilesDiv.style.display = 'none';
+      uploadBtn.style.display = 'none';
+    }
+  }
+
+  // Get appropriate icon for file type
+  function getFileIcon(file) {
+    if (file.type.startsWith('image/')) return '🖼️';
+    if (file.type.startsWith('video/')) return '🎥';
+    if (file.type.includes('pdf')) return '📄';
+    return '📎';
+  }
+
+  // Format file size
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // Show message
+  function showMessage(text, type = '') {
+    message.textContent = text;
+    message.className = type;
+    message.style.display = 'block';
+    setTimeout(() => {
+      message.style.display = 'none';
+    }, 3000);
+  }
+
+  // Function to check user's upload limit
+  async function checkUploadLimit(uid) {
+    try {
+      console.log('🔍 Checking upload limit for user:', uid);
+      
+      const userDoc = await db.collection('users').doc(uid).get();
+      
+      if (!userDoc.exists) {
+        return { allowed: true, remaining: 'unknown', limit: 'unknown', current: 0 };
+      }
+      
+      const userData = userDoc.data();
+      const limit = userData.photos_limit || 'unlimited';
+      
+      if (limit === 'unlimited') {
+        return { allowed: true, remaining: 'unlimited', limit: 'unlimited', current: 0 };
+      }
+      
+      const uploadsSnapshot = await db.collection('uploads')
+        .where('userId', '==', uid)
+        .get();
+      
+      const currentCount = uploadsSnapshot.size;
+      const remaining = parseInt(limit) - currentCount;
+      
+      return {
+        allowed: remaining > 0,
+        remaining: remaining,
+        limit: parseInt(limit),
+        current: currentCount
+      };
+      
+    } catch (error) {
+      console.error('❌ Error checking limit:', error);
+      return { allowed: true, remaining: 'error', limit: 'error', current: 0 };
+    }
+  }
+
+  // ===== UPLOAD FUNCTIONALITY =====
+  
+  uploadBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) {
+      showMessage('Please select files first', 'error');
+      return;
+    }
+
+    // Check upload limit
+    const limitCheck = await checkUploadLimit(targetUid);
+    
+    if (!limitCheck.allowed) {
+      message.innerHTML = `
+        <div style="text-align: center; padding: 1rem;">
+          <div style="font-size: 1.5rem; color: #dc2626; margin-bottom: 0.5rem;">❌</div>
+          <div style="font-weight: 700; color: #7f1d1d; margin-bottom: 0.5rem;">Upload Limit Reached!</div>
+          <div style="color: #991b1b;">
+            You have used ${limitCheck.current}/${limitCheck.limit} uploads.
+          </div>
+        </div>
+      `;
+      message.className = 'error';
+      message.style.display = 'block';
+      return;
+    }
+    
+    if (limitCheck.remaining !== 'unlimited' && 
+        limitCheck.remaining !== 'error' && 
+        limitCheck.remaining !== 'unknown' &&
+        limitCheck.remaining < selectedFiles.length) {
+      
+      message.innerHTML = `
+        <div style="text-align: center; padding: 1rem;">
+          <div style="font-size: 1.5rem; color: #f59e0b; margin-bottom: 0.5rem;">⚠️</div>
+          <div style="font-weight: 700; color: #92400e; margin-bottom: 0.5rem;">Too Many Files!</div>
+          <div style="color: #92400e;">
+            You can only upload ${limitCheck.remaining} more file(s).
+          </div>
+        </div>
+      `;
+      message.className = 'error';
+      message.style.display = 'block';
+      return;
+    }
+
+    // Disable upload button during upload
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = `⏳ Uploading...`;
+    
+    message.innerHTML = `
+      <div style="text-align: center; padding: 1rem;">
+        <div style="font-size: 1.5rem; color: #3b82f6; margin-bottom: 0.5rem;">⏳</div>
+        <div style="font-weight: 700; color: #1e40af; margin-bottom: 0.5rem;">Uploading ${selectedFiles.length} file(s)...</div>
+        <div style="color: #3b82f6;" id="uploadProgress">Starting...</div>
+      </div>
+    `;
+    message.className = '';
+    message.style.display = 'block';
+    
+    preview.innerHTML = '';
+
+    let uploadCount = 0;
+    let errorCount = 0;
+    const totalFiles = selectedFiles.length;
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      
+      try {
+        // Update progress
+        document.getElementById('uploadProgress').textContent = 
+          `Uploading ${i + 1} of ${totalFiles}: ${file.name}`;
+        
+        // Create unique filename
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storagePath = `uploads/${targetUid}/${fileName}`;
+        const ref = storage.ref(storagePath);
+        
+        // Upload file to Firebase Storage
+        await ref.put(file);
+
+        // Get download URL
+        const url = await ref.getDownloadURL();
+
+        // Save metadata to Firestore
+        await db.collection('uploads').add({
+          userId: targetUid,
+          name: file.name,
+          type: file.type || 'unknown',
+          url: url,
+          uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          size: file.size,
+          path: storagePath,
+          timestamp: Date.now()
+        });
+
+        // Show success in preview
+        const status = document.createElement('div');
+        status.className = 'preview-item';
+        status.textContent = `✅ ${file.name} uploaded!`;
+        status.style.color = '#065f46';
+        status.style.background = '#d1fae5';
+        preview.appendChild(status);
+        
+        uploadCount++;
+        
+      } catch (err) {
+        console.error('Error uploading', file.name, ':', err);
+        
+        const status = document.createElement('div');
+        status.className = 'preview-item';
+        status.style.color = '#991b1b';
+        status.style.background = '#fee2e2';
+        status.textContent = `❌ ${file.name} failed: ${err.message || 'Unknown error'}`;
+        preview.appendChild(status);
+        errorCount++;
+      }
+    }
+
+    // Final message
+    if (errorCount === 0) {
+      message.innerHTML = `
+        <div style="text-align: center; padding: 1rem;">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎉</div>
+          <div style="font-weight: 700; color: #065f46; margin-bottom: 0.5rem;">Upload Complete!</div>
+          <div style="color: #065f46;">
+            Successfully uploaded ${uploadCount} file(s).
+          </div>
+        </div>
+      `;
+      message.className = 'success';
+    } else {
+      message.innerHTML = `
+        <div style="text-align: center; padding: 1rem;">
+          <div style="font-size: 1.5rem; color: #f59e0b; margin-bottom: 0.5rem;">⚠️</div>
+          <div style="font-weight: 700; color: #92400e; margin-bottom: 0.5rem;">Upload Finished</div>
+          <div style="color: #92400e;">
+            Uploaded ${uploadCount} file(s), ${errorCount} failed.
+          </div>
+        </div>
+      `;
+      message.className = 'error';
+    }
+    message.style.display = 'block';
+
+    // Reset
+    selectedFiles = [];
+    updateFileList();
+    uploadBtn.disabled = false;
+    uploadBtn.innerHTML = `📤 Upload <span id="uploadCount">0</span> File(s)`;
+  });
+</script>
+</body>
+</html>
